@@ -47,53 +47,98 @@ class _LaporanInputState extends State<LaporanInput> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Input Laporan Keuangan'),
-      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         reverse: true,
         children: [
-          SizedBox(
+          const SizedBox(
             height: 16,
           ),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton(
-              onPressed: () {},
-              style: ButtonStyle(
-                backgroundColor: WidgetStateProperty.all(
-                    Theme.of(context).colorScheme.inverseSurface),
-                foregroundColor: WidgetStateProperty.all(
-                    Theme.of(context).colorScheme.onPrimary),
-                shape: WidgetStateProperty.all(
-                  RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  top: 4,
-                  bottom: 4,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Masukkan',
-                      style: TextStyle(fontSize: 18),
-                    ),
-                    SizedBox(width: 8),
-                    Icon(Icons.send),
-                  ],
-                ),
-              ),
+          buildButton(
+            context,
+            type: 'secondary',
+            text: 'Cancel',
+            icon: Icons.close,
+            onPressed: () {
+              Navigator.pop(context);
+            },
+          ),
+          const SizedBox(
+            height: 8,
+          ),
+          buildButton(
+            context,
+            type: 'primary',
+            text: 'Submit',
+            icon: Icons.send,
+            onPressed: () {},
+          ),
+          const SizedBox(height: 8),
+          buildCategoryButton(),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  SizedBox buildButton(BuildContext context,
+      {String type = 'primary',
+      String text = 'Submit',
+      IconData? icon = Icons.send,
+      void Function()? onPressed}) {
+    return SizedBox(
+      width: double.infinity,
+      child: TextButton(
+        onPressed: () {
+          onPressed != null ? onPressed() : null;
+        },
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.all(
+            type == 'primary'
+                ? Theme.of(context).colorScheme.inverseSurface
+                : Colors.transparent,
+          ),
+          foregroundColor: WidgetStateProperty.all(
+            type == 'primary'
+                ? Theme.of(context).colorScheme.onPrimary
+                : Theme.of(context).colorScheme.onSurface,
+          ),
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
-          SizedBox(height: 16),
-          buildCategoryButton()
-        ],
+          side: type == 'secondary'
+              ? WidgetStateProperty.all(
+                  BorderSide(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .inverseSurface
+                        .withAlpha(150),
+                    width: 1,
+                  ),
+                )
+              : null,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(
+            top: 4,
+            bottom: 4,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                text,
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(width: icon == null ? 0 : 4),
+              if (icon == null) const SizedBox(width: 8),
+              if (icon != null) Icon(icon),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -109,7 +154,7 @@ class _LaporanInputState extends State<LaporanInput> {
           Colors.green,
           Icons.arrow_downward_rounded,
         ),
-        SizedBox(width: 16),
+        const SizedBox(width: 8),
         buildSelectButton(
           _laporan['laporan_type'],
           _possibleLaporanType[1],
@@ -162,7 +207,7 @@ class _LaporanInputState extends State<LaporanInput> {
                       fontSize: 16,
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Icon(icon),
                 ],
               ),

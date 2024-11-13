@@ -31,7 +31,29 @@ class _HomeState extends State<Home> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Expense Tracker'),
+        toolbarHeight: 80,
+        title: const Column(
+          children: [
+            SizedBox(
+              height: 16,
+            ),
+            Row(
+              children: [
+                Text(
+                  'Saving',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                  ),
+                ),
+                SizedBox(
+                  width: 8,
+                ),
+                Icon(Icons.account_balance_wallet),
+              ],
+            ),
+          ],
+        ),
       ),
       body: Center(
         child: _laporans.length > 0 ? null : const Text('No data available'),
@@ -42,8 +64,8 @@ class _HomeState extends State<Home> {
         ),
         backgroundColor: Theme.of(context).colorScheme.inverseSurface,
         onPressed: () {
-          Navigator.push(
-              context, MaterialPageRoute(builder: (context) => LaporanInput()));
+          Navigator.push(context,
+              MaterialPageRoute(builder: (context) => const LaporanInput()));
         },
         child: Icon(
           Icons.add,
