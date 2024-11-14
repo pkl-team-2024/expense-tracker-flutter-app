@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:hive/hive.dart';
 
 part 'laporan_model.g.dart';
@@ -8,7 +10,7 @@ class LaporanHiveModel extends HiveObject {
   String id;
 
   @HiveField(1)
-  String laporan_type;
+  bool isIncome;
 
   @HiveField(2)
   String category;
@@ -19,11 +21,19 @@ class LaporanHiveModel extends HiveObject {
   @HiveField(4)
   double amount;
 
+  @HiveField(5)
+  Uint8List? image;
+
+  @HiveField(6)
+  String? imageName;
+
   LaporanHiveModel({
     required this.id,
-    required this.laporan_type,
+    required this.isIncome,
     required this.category,
     required this.date,
     required this.amount,
+    this.image,
+    this.imageName,
   });
 }
