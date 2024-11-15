@@ -27,11 +27,13 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'Saving',
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
             useMaterial3: true,
           ),
           darkTheme: ThemeData(
             brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.blue, brightness: Brightness.dark),
           ),
           themeMode: themeProvider.themeMode,
           home: const Home(),

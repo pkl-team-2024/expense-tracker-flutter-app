@@ -43,6 +43,8 @@ dependencies:
   image_picker:
   flutter_image_compress:
   provider:
+  simple_gradient_text:
+
 
 dev_dependencies:
   flutter_test:

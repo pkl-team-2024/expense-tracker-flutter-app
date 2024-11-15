@@ -19,6 +19,7 @@ class CustomCategoryDrawer extends StatefulWidget {
 
 class _CustomCategoryDrawerState extends State<CustomCategoryDrawer> {
   late String _selectedCategory;
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -30,7 +31,7 @@ class _CustomCategoryDrawerState extends State<CustomCategoryDrawer> {
   Widget build(BuildContext context) {
     double minChildSize = 0.2;
     double maxChildSize = 0.8;
-    double initialChildSize = ((widget.possibleKategori.length * 0.09))
+    double initialChildSize = ((widget.possibleKategori.length * 0.06 + 0.04))
         .clamp(minChildSize, maxChildSize);
 
     return DraggableScrollableSheet(
@@ -40,7 +41,7 @@ class _CustomCategoryDrawerState extends State<CustomCategoryDrawer> {
       builder: (BuildContext context, ScrollController scrollController) {
         return Container(
           padding: const EdgeInsets.only(
-            top: 16.0,
+            top: 12.0,
             left: 8.0,
             right: 8.0,
           ),
@@ -66,34 +67,54 @@ class _CustomCategoryDrawerState extends State<CustomCategoryDrawer> {
                   )
                 ],
               ),
-              const SizedBox(height: 12.0),
+              const SizedBox(height: 14.0),
               Expanded(
                 child: ListView.builder(
                   itemCount: widget.possibleKategori.length,
                   itemBuilder: (BuildContext context, int index) {
                     String category = widget.possibleKategori[index];
-                    return ListTile(
-                      contentPadding: const EdgeInsets.only(
-                        left: 16.0,
-                        right: 16.0,
-                      ),
-                      title: Text(
-                        category,
-                        style: TextStyle(
-                          fontSize: 18.0,
-                          fontWeight: FontWeight.w500,
-                          color: _selectedCategory == category
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
+                    return InkWell(
                       onTap: () {
                         setState(() {
                           _selectedCategory = category;
                         });
                         widget.onCategorySelected(category);
-                        Navigator.of(context).pop();
+
+                        if (_isNavigating) return;
+                        _isNavigating = true;
+
+                        Future.delayed(const Duration(milliseconds: 200), () {
+                          Navigator.of(context).pop();
+                        });
                       },
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 3.0),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10.0, horizontal: 12.0),
+                          decoration: BoxDecoration(
+                            color: _selectedCategory == category
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withOpacity(0.1)
+                                : Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                          child: Text(
+                            category,
+                            style: TextStyle(
+                              fontSize: 20.0,
+                              fontWeight: _selectedCategory == category
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
+                              color: _selectedCategory == category
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),

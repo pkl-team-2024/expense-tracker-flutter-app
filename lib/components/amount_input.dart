@@ -5,11 +5,13 @@ class AmountAlertDialog extends StatefulWidget {
   final double initialAmount;
   final Function(double) onAmountSelected;
   final String category;
+  final String laporanType;
 
   AmountAlertDialog({
     required this.initialAmount,
     required this.onAmountSelected,
     required this.category,
+    required this.laporanType,
   });
 
   @override
@@ -18,7 +20,10 @@ class AmountAlertDialog extends StatefulWidget {
 
 class _AmountAlertDialogState extends State<AmountAlertDialog> {
   double _selectedAmount = 0.0;
-  final List<double> _commonAmounts = [100000, 50000, 20000, 10000, 5000];
+  final Map<String, List<double>> _commonAmountsMap = {
+    'Pemasukan': [11000000, 15000000, 20000000],
+    'Pengeluaran': [100000, 500000, 1000000, 2000000]
+  };
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
@@ -67,7 +72,7 @@ class _AmountAlertDialogState extends State<AmountAlertDialog> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: _commonAmounts
+              children: _commonAmountsMap[widget.laporanType]!
                   .map(
                     (amount) => Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4.0),

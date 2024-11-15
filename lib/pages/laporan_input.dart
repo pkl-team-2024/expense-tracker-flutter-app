@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:finance_tracker/components/amount_input.dart';
 import 'package:finance_tracker/components/category_drawer.dart';
 import 'package:finance_tracker/components/snackbar.dart';
 import 'package:finance_tracker/models/laporan_model.dart';
@@ -29,12 +28,121 @@ class _LaporanInputState extends State<LaporanInput> {
     'isIncome': true,
   };
 
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+
   File? _selectedImage;
   String _selectedImageName = '';
 
+  final Map<String, List<double>> _commonAmountsMap = {
+    'Pemasukan': [20000000, 15000000, 11000000],
+    'Pengeluaran': [2000000, 1000000, 500000, 100000]
+  };
+
   Future<void> _pickImage() async {
+    ImageSource? source;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      builder: (BuildContext context) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _focusNode.requestFocus();
+        });
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).pop();
+          },
+          child: Container(
+            color: Colors.transparent,
+            child: GestureDetector(
+              onTap: () {},
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                child: Container(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).canvasColor,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              height: 5.0,
+                              width: 100.0,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                borderRadius: BorderRadius.circular(10.0),
+                              ),
+                            )
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: () {
+                            source = ImageSource.camera;
+                            Navigator.pop(context);
+                          },
+                          child: Row(
+                            children: [
+                              const Icon(Icons.camera_alt),
+                              const SizedBox(width: 8),
+                              Text('Kamera',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
+                                  )),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            source = ImageSource.gallery;
+                            Navigator.pop(context);
+                          },
+                          child: Row(
+                            children: [
+                              const Icon(Icons.photo),
+                              const SizedBox(width: 8),
+                              Text('Galeri',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    color:
+                                        Theme.of(context).colorScheme.onSurface,
+                                  )),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (source == null) return;
+
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    final XFile? image = await picker.pickImage(source: source!);
 
     if (image != null) {
       final compressedImage = await _compressImage(File(image.path));
@@ -57,11 +165,10 @@ class _LaporanInputState extends State<LaporanInput> {
 
   Future<Uint8List?> _compressImage(File file) async {
     final result = await FlutterImageCompress.compressWithFile(
-        file.absolute.path,
-        minWidth: 800,
-        minHeight: 800,
-        quality: 60,
-        format: CompressFormat.jpeg);
+      file.absolute.path,
+      quality: 60,
+      format: CompressFormat.jpeg,
+    );
     return result;
   }
 
@@ -70,6 +177,7 @@ class _LaporanInputState extends State<LaporanInput> {
       _laporan['isIncome'] = laporanType == _possibleLaporanType[0];
       _laporan['laporanType'] = laporanType;
       _laporan['category'] = _possibleKategori[laporanType]![0];
+      _laporan['amount'] = 0.0;
     });
   }
 
@@ -79,18 +187,33 @@ class _LaporanInputState extends State<LaporanInput> {
   ];
   static const Map<String, List<String>> _possibleKategori = {
     'Pemasukan': [
-      'Gaji',
-      'Bonus',
-      'Hadiah',
+      'Dana Operasional',
+      'CA Project',
+      'CA Lainnya',
       'Lainnya',
     ],
     'Pengeluaran': [
-      'Makanan',
-      'Transportasi',
-      'Hiburan',
+      'Alat Tulis Kantor',
+      'Meeting',
+      'Jamuan Tamu',
+      'Konsumsi SPJM',
+      'Konsumsi Regional',
       'Lainnya',
     ],
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.text = _laporan['amount'].toString();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +224,7 @@ class _LaporanInputState extends State<LaporanInput> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 50),
+            const SizedBox(height: 40),
             buildPreview(),
             buildImageInput(),
             buildDateInput(),
@@ -516,12 +639,6 @@ class _LaporanInputState extends State<LaporanInput> {
   }
 
   Widget buildAmountInput() {
-    void onAmountSelected(double amount) {
-      setState(() {
-        _laporan['amount'] = amount;
-      });
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -536,13 +653,154 @@ class _LaporanInputState extends State<LaporanInput> {
             color: Colors.transparent,
             child: InkWell(
               onTap: () async {
-                await await showDialog(
+                await showModalBottomSheet(
                   context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  isDismissible: true,
                   builder: (BuildContext context) {
-                    return AmountAlertDialog(
-                      initialAmount: _laporan['amount'],
-                      category: _laporan['category'],
-                      onAmountSelected: onAmountSelected,
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _focusNode.requestFocus();
+                    });
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: Container(
+                        color: Colors.transparent,
+                        child: GestureDetector(
+                          onTap: () {},
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            child: Container(
+                              padding: EdgeInsets.only(
+                                bottom:
+                                    MediaQuery.of(context).viewInsets.bottom,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).canvasColor,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Container(
+                                          height: 5.0,
+                                          width: 100.0,
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface,
+                                            borderRadius:
+                                                BorderRadius.circular(10.0),
+                                          ),
+                                        )
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    TextField(
+                                      keyboardType: TextInputType.number,
+                                      controller: _controller,
+                                      focusNode: _focusNode,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      onSubmitted: (value) {
+                                        final amount = double.tryParse(value);
+                                        if (amount != null) {
+                                          setState(() {
+                                            _laporan['amount'] = amount;
+                                          });
+                                        }
+                                        Navigator.of(context).pop();
+                                      },
+                                      decoration: const InputDecoration(
+                                        labelText: 'Jumlah',
+                                        prefix: Text('Rp '),
+                                        suffixIcon: Icon(
+                                          CupertinoIcons.money_dollar_circle,
+                                        ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.all(
+                                            Radius.circular(10.0),
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                      onChanged: (value) {
+                                        final amount = double.tryParse(value);
+                                        if (amount != null) {
+                                          setState(() {
+                                            _laporan['amount'] = amount;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    const SizedBox(height: 4),
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        children: _commonAmountsMap[
+                                                _laporan['laporanType']]!
+                                            .map(
+                                              (amount) => Padding(
+                                                padding: const EdgeInsets.only(
+                                                    right: 4.0),
+                                                child: TextButton(
+                                                  style: TextButton.styleFrom(
+                                                    backgroundColor:
+                                                        Theme.of(context)
+                                                            .colorScheme
+                                                            .inverseSurface
+                                                            .withOpacity(0.05),
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    formatRupiah(amount),
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _laporan['amount'] =
+                                                          amount;
+                                                      _controller.text =
+                                                          amount.toString();
+                                                    });
+                                                  },
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     );
                   },
                 );
@@ -610,20 +868,32 @@ class _LaporanInputState extends State<LaporanInput> {
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
+                  isDismissible: true,
                   builder: (BuildContext context) {
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                      child: CustomCategoryDrawer(
-                        initialCategory: _laporan['category'],
-                        onCategorySelected: (String category) {
-                          setState(() {
-                            _laporan['category'] = category;
-                          });
-                        },
-                        laporanType: _laporan['laporanType'],
-                        possibleKategori:
-                            _possibleKategori[_laporan['laporanType']]!,
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: Container(
+                        color: Colors.transparent,
+                        child: GestureDetector(
+                          onTap: () {},
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            child: CustomCategoryDrawer(
+                              initialCategory: _laporan['category'],
+                              onCategorySelected: (String category) {
+                                setState(() {
+                                  _laporan['category'] = category;
+                                });
+                              },
+                              laporanType: _laporan['laporanType'],
+                              possibleKategori:
+                                  _possibleKategori[_laporan['laporanType']]!,
+                            ),
+                          ),
+                        ),
                       ),
                     );
                   },
