@@ -2,6 +2,7 @@ import 'package:finance_tracker/helper/theme_changer.dart';
 import 'package:finance_tracker/models/laporan_model.dart';
 import 'package:finance_tracker/pages/home.dart';
 import 'package:flutter/material.dart';
+import 'package:overlay_support/overlay_support.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
@@ -10,9 +11,11 @@ void main() async {
   Hive.registerAdapter(LaporanHiveModelAdapter());
   await Hive.openBox<LaporanHiveModel>('laporanBox');
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child: const MyApp(),
+    OverlaySupport.global(
+      child: ChangeNotifierProvider(
+        create: (_) => ThemeProvider(),
+        child: const MyApp(),
+      ),
     ),
   );
 }

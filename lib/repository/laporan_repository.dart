@@ -35,4 +35,12 @@ class LaporanRepository {
     final box = await _getBox();
     await box.clear();
   }
+
+  Future<void> importData(List<LaporanHiveModel> laporanList) async {
+    final box = await _getBox();
+    await box.clear();
+    for (final laporan in laporanList) {
+      await box.put(laporan.id, laporan);
+    }
+  }
 }

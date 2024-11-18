@@ -46,6 +46,10 @@ dependencies:
   simple_gradient_text:
   csv:
   path_provider:
+  overlay_support:
+  image_gallery_saver:
+  permission_handler:
+
 
 
 dev_dependencies:

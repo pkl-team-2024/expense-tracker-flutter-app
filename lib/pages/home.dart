@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:csv/csv.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:finance_tracker/components/drawer.dart';
 import 'package:finance_tracker/components/snackbar.dart';
 import 'package:finance_tracker/helper/theme_changer.dart';
@@ -13,8 +14,11 @@ import 'package:finance_tracker/pages/laporan_input.dart';
 import 'package:finance_tracker/repository/laporan_repository.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:intl/intl.dart';
+import 'package:overlay_support/overlay_support.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 class Home extends StatefulWidget {
@@ -57,7 +61,7 @@ class _HomeState extends State<Home> {
               try {
                 final Map<String, Function> operations = {
                   'Import Data': () async {
-                    await importDataFromCSV();
+                    await importDataFromCSV(_repository);
                   },
                   'Export Data': () async {
                     await exportDataToCSV(_laporans, beforeImport: false);
@@ -680,14 +684,69 @@ class _HomeState extends State<Home> {
           width: double.infinity,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
-            child: InteractiveViewer(
-              boundaryMargin: const EdgeInsets.all(20.0),
-              minScale: 0.5,
-              maxScale: 4.0,
-              child: Image.memory(
-                laporan.image!,
-                fit: BoxFit.contain,
-              ),
+            child: Stack(
+              children: [
+                Center(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: InteractiveViewer(
+                      boundaryMargin: const EdgeInsets.all(20.0),
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child: Image.memory(
+                        laporan.image!,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    icon: const Icon(Icons.download),
+                    color: Colors.white,
+                    style: ButtonStyle(
+                      backgroundColor: WidgetStateProperty.all(Colors.black),
+                    ),
+                    onPressed: () async {
+                      var status = await Permission.storage.request();
+                      if (!status.isGranted) {
+                        showSimpleNotification(
+                          const Text(
+                              'Gagal menyimpan gambar: Izin tidak diberikan'),
+                          background: Colors.red,
+                          duration: const Duration(milliseconds: 500),
+                        );
+                        return;
+                      }
+
+                      final result = await ImageGallerySaver.saveImage(
+                        Uint8List.fromList(laporan.image!),
+                        quality: 100,
+                        name:
+                            'image_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}',
+                      );
+
+                      if (result['isSuccess']) {
+                        showSimpleNotification(
+                          const Text('Gambar berhasil disimpan ke galeri'),
+                          background: Colors.green,
+                          duration: const Duration(milliseconds: 500),
+                          position: NotificationPosition.bottom,
+                        );
+                      } else {
+                        showSimpleNotification(
+                          const Text('Gagal menyimpan gambar'),
+                          background: Colors.red,
+                          duration: const Duration(milliseconds: 500),
+                          position: NotificationPosition.bottom,
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -777,5 +836,47 @@ class _HomeState extends State<Home> {
         : null;
   }
 
-  importDataFromCSV() {}
+  Future<void> importDataFromCSV(LaporanRepository repository) async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      dialogTitle: 'Pilih file CSV',
+    );
+
+    if (result != null) {
+      File file = File(result.files.single.path!);
+      String csvString = await file.readAsString();
+
+      List<List<dynamic>> csvTable =
+          const CsvToListConverter().convert(csvString);
+      csvTable.removeAt(0);
+
+      final List<LaporanHiveModel> laporans = [];
+      for (var row in csvTable) {
+        final laporan = LaporanHiveModel(
+          id: row[0],
+          category: row[1],
+          amount: row[2] is String ? double.parse(row[2]) : row[2],
+          date: DateTime.parse(row[3]),
+          isIncome: row[4] == 'True',
+          image: row[5] != 'No Data' ? base64Decode(row[5]) : null,
+          imageName: row[6] != 'No Data' ? row[6] : null,
+        );
+
+        laporans.add(laporan);
+      }
+
+      try {
+        await exportDataToCSV(laporans, beforeImport: true);
+        await repository.importData(laporans);
+        _fetchLaporan(context);
+      } catch (e) {
+        ShowSnackBar().show(context, 'Gagal import data: $e');
+      }
+
+      ShowSnackBar().show(context, 'Data berhasil diimport');
+    } else {
+      ShowSnackBar().show(context, 'Gagal memilih file');
+    }
+  }
 }
