@@ -1,7 +1,12 @@
+// TODO: kayaknya ini keuangan bukan bulan ini tapi seluruhnya
+
 // ignore_for_file: prefer_interpolation_to_compose_strings
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-
+import 'package:csv/csv.dart';
+import 'package:finance_tracker/components/drawer.dart';
+import 'package:finance_tracker/components/snackbar.dart';
 import 'package:finance_tracker/helper/theme_changer.dart';
 import 'package:finance_tracker/models/laporan_model.dart';
 import 'package:finance_tracker/pages/laporan_input.dart';
@@ -9,6 +14,7 @@ import 'package:finance_tracker/repository/laporan_repository.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 class Home extends StatefulWidget {
@@ -38,15 +44,72 @@ class _HomeState extends State<Home> {
   @override
   Widget build(BuildContext context) {
     var thisMonth = DateTime.now().month;
-    double thisMonthAmount = getAmountByMonth(thisMonth);
-    double lastMonthAmount = getAmountByMonth(thisMonth - 1);
-    double percentageDifference =
-        getPercentageDifference(thisMonthAmount, lastMonthAmount);
-    bool isPositive = percentageDifference > 0;
+    double thisMonthAmount = getAmount(thisMonth);
+    double allAmount = getAmount(null);
+    bool isPositive = allAmount >= 0;
+    double screenHeight = MediaQuery.of(context).size.height;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         actions: [
+          IconButton(
+            onPressed: () async {
+              try {
+                final Map<String, Function> operations = {
+                  'Import Data': () async {
+                    await importDataFromCSV();
+                  },
+                  'Export Data': () async {
+                    await exportDataToCSV(_laporans, beforeImport: false);
+                  },
+                  'Cancel': () {},
+                };
+
+                String operation = await modalBottomSheetComponent(
+                      context: context,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: operations.keys.length,
+                            itemBuilder: (context, index) {
+                              final operation =
+                                  operations.keys.elementAt(index);
+                              return GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).pop(operation);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.only(
+                                    top: 8,
+                                    bottom: 8,
+                                    left: 8,
+                                  ),
+                                  child: Text(operation,
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w500,
+                                      )),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ) ??
+                    'Cancel';
+
+                operations[operation]!();
+              } catch (e) {
+                ShowSnackBar().show(context, 'Gagal export data: $e');
+              }
+            },
+            icon: const Icon(
+              CupertinoIcons.folder_solid,
+              color: Colors.white,
+            ),
+          ),
           Consumer<ThemeProvider>(
             builder: (context, themeProvider, child) {
               return IconButton(
@@ -68,10 +131,10 @@ class _HomeState extends State<Home> {
             Row(
               children: [
                 Text(
-                  'Saving',
+                  'Finance AMK',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 24,
+                    fontSize: 22,
                     color: Colors.white,
                   ),
                 ),
@@ -100,13 +163,13 @@ class _HomeState extends State<Home> {
                     Icon(
                       CupertinoIcons.money_dollar,
                       color: Colors.white.withOpacity(0.5),
-                      size: 120,
+                      size: 64,
                     ),
                     Text(
                       'Belum ada data',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.5),
-                        fontSize: 32,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -116,16 +179,14 @@ class _HomeState extends State<Home> {
             )
           : Column(
               children: [
-                buildOverview(
-                    thisMonthAmount, isPositive, percentageDifference),
+                buildOverview(thisMonthAmount, allAmount),
                 Expanded(
                   child: Container(
-                    margin: const EdgeInsets.only(top: 16),
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.surface,
                       borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        topRight: Radius.circular(32),
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
                       ),
                     ),
                     child: Padding(
@@ -190,7 +251,7 @@ class _HomeState extends State<Home> {
                                                 color: laporan.isIncome == true
                                                     ? Colors.green
                                                     : Colors.red,
-                                                size: 48,
+                                                size: 38,
                                               ),
                                             ],
                                           ),
@@ -212,7 +273,7 @@ class _HomeState extends State<Home> {
                                               Text(
                                                 formatRupiah(laporan.amount),
                                                 style: const TextStyle(
-                                                  fontSize: 22,
+                                                  fontSize: 18,
                                                   fontWeight: FontWeight.w500,
                                                 ),
                                               ),
@@ -264,8 +325,8 @@ class _HomeState extends State<Home> {
         ),
         backgroundColor: Theme.of(context).colorScheme.inverseSurface,
         onPressed: () async {
-          bool? shouldRefresh = await Navigator.push(context,
-              MaterialPageRoute(builder: (context) => const LaporanInput()));
+          bool? shouldRefresh = await Navigator.push(
+              context, MaterialPageRoute(builder: (context) => LaporanInput()));
 
           shouldRefresh ??= false;
 
@@ -281,8 +342,7 @@ class _HomeState extends State<Home> {
     );
   }
 
-  Padding buildOverview(
-      double thisMonthAmount, bool isPositive, double percentageDifference) {
+  Padding buildOverview(double thisMonthAmount, double allAmount) {
     return Padding(
       padding: const EdgeInsets.only(
         left: 16,
@@ -297,7 +357,7 @@ class _HomeState extends State<Home> {
           const Row(
             children: [
               Text(
-                'Keuangan Bulan Ini',
+                'Total Keuangan',
                 style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -309,7 +369,7 @@ class _HomeState extends State<Home> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                formatRupiah(thisMonthAmount),
+                formatRupiah(allAmount),
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
@@ -318,35 +378,29 @@ class _HomeState extends State<Home> {
               ),
             ],
           ),
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-              color: isPositive
-                  ? Colors.green.withOpacity(0.8)
-                  : Colors.red.withOpacity(0.8),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(
-                left: 8,
-                right: 8,
-                top: 4,
-                bottom: 4,
-              ),
-              child: Text(
-                percentageDifference.isFinite
-                    ? (isPositive ? '+' : '-') +
-                        percentageDifference.abs().toStringAsFixed(1) +
-                        '% Dari bulan lalu'
-                    : 'Tidak ada data bulan lalu',
-                style: const TextStyle(
+          Row(
+            children: [
+              const Text(
+                "Bulan ini:",
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,
                 ),
                 textAlign: TextAlign.center,
               ),
-            ),
+              const SizedBox(
+                width: 4,
+              ),
+              Text(
+                formatRupiah(thisMonthAmount),
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
         ],
       ),
@@ -397,8 +451,111 @@ class _HomeState extends State<Home> {
                     ),
                     const SizedBox(height: 16),
                     laporan.image != null
-                        ? buildLaporanPreview(laporan)
-                        : const Text('')
+                        ? buildLaporanPreviewImage(laporan)
+                        : buildLaporanPreviewNoImage(context),
+                    const SizedBox(height: 16),
+                    buildLaporanPreviewData(context, laporan),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: Theme.of(context).colorScheme.surfaceContainer,
+                      ),
+                      width: double.infinity,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: Text(
+                              'Tutup',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              bool shouldRefresh = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => LaporanInput(
+                                        laporan: laporan,
+                                      ),
+                                    ),
+                                  ) ??
+                                  false;
+                              if (shouldRefresh) {
+                                Navigator.of(context).pop();
+                                _fetchLaporan(context);
+                              }
+                            },
+                            child: Text(
+                              'Edit',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              bool shouldDelete = await showDialog(
+                                context: context,
+                                builder: (context) {
+                                  return AlertDialog(
+                                    title: const Text('Hapus Laporan'),
+                                    content: const Text(
+                                        'Apakah Anda yakin ingin menghapus laporan ini?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.of(context).pop(false);
+                                        },
+                                        child: Text(
+                                          'Batal',
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.of(context).pop(true);
+                                        },
+                                        child: Text(
+                                          'Hapus',
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+
+                              if (shouldDelete) {
+                                await _repository.delete(laporan.id);
+                                _fetchLaporan(context);
+                                Navigator.of(context).pop();
+                              }
+                            },
+                            child: Text(
+                              'Hapus',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
                   ],
                 ),
               ),
@@ -409,28 +566,117 @@ class _HomeState extends State<Home> {
     );
   }
 
-  Widget buildLaporanPreview(LaporanHiveModel laporan) {
-    return Column(
-      children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 16, top: 16),
-          padding: const EdgeInsets.only(
-            left: 16,
-            right: 8,
-            top: 8,
-            bottom: 8,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+  Container buildLaporanPreviewData(
+      BuildContext context, LaporanHiveModel laporan) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Kategori',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  laporan.category,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Jumlah',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  formatRupiah(laporan.amount),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Tanggal',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  DateFormat('dd MMM yyyy').format(laporan.date),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Container buildLaporanPreviewNoImage(BuildContext context) {
+    return Container(
+      height: 200,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Center(
+        child: Text(
+          'Tanpa gambar',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget buildLaporanPreviewImage(LaporanHiveModel laporan) {
+    double screenHeight = MediaQuery.of(context).size.height;
+
+    return Column(
+      children: [
         Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(16),
           ),
-          height: 300,
+          height: screenHeight * 0.5,
           width: double.infinity,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16),
@@ -440,7 +686,7 @@ class _HomeState extends State<Home> {
               maxScale: 4.0,
               child: Image.memory(
                 laporan.image!,
-                fit: BoxFit.fitWidth,
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -462,8 +708,10 @@ class _HomeState extends State<Home> {
     return formatter.format(amount);
   }
 
-  double getAmountByMonth(int month) {
-    var laporan = _laporans.where((laporan) => laporan.date.month == month);
+  double getAmount(int? month) {
+    var laporan = month == null
+        ? _laporans
+        : _laporans.where((laporan) => laporan.date.month == month);
     double getFoldAmount(laporan) {
       return laporan.fold(0.0, (sum, laporan) => sum + laporan.amount);
     }
@@ -473,6 +721,61 @@ class _HomeState extends State<Home> {
   }
 
   double getPercentageDifference(double amountByMonth, double amountByMonth2) {
-    return ((amountByMonth - amountByMonth2) / amountByMonth2) * 100;
+    if (amountByMonth2 == 0) {
+      return double.nan;
+    }
+    if (amountByMonth == 0) {
+      return amountByMonth2 < 0 ? -100 : 100 * amountByMonth2.abs();
+    }
+    double difference = amountByMonth - amountByMonth2;
+    double percentageDifference = (difference / amountByMonth2) * 100;
+    return percentageDifference;
   }
+
+  exportDataToCSV(List<LaporanHiveModel> laporans,
+      {bool beforeImport = false}) async {
+    final List<List<String>> rows = [];
+
+    rows.add([
+      'ID',
+      'Category',
+      'Amount',
+      'Date',
+      'IsIncome',
+      'Image',
+      'ImageName',
+    ]);
+
+    for (var laporan in laporans) {
+      rows.add([
+        laporan.id,
+        laporan.category,
+        laporan.amount.toString(),
+        laporan.date.toIso8601String(),
+        laporan.isIncome ? 'True' : 'False',
+        laporan.image != null ? base64Encode(laporan.image!) : 'No Data',
+        laporan.imageName ?? 'No Data',
+      ]);
+    }
+
+    String csv = const ListToCsvConverter().convert(rows);
+    final directory = await getExternalStorageDirectory();
+    if (directory == null) {
+      ShowSnackBar()
+          .show(context, 'Gagal export data: Directory tidak ditemukan');
+      return;
+    }
+    final dateTime = DateTime.now();
+    final formattedDateTime = DateFormat('yyyyMMdd_HHmmss').format(dateTime);
+    final path =
+        '${directory.path}/laporan_data_$formattedDateTime${beforeImport ? '_before_import' : ''}.csv';
+    final file = File(path);
+    await file.writeAsString(csv);
+
+    !beforeImport
+        ? ShowSnackBar().show(context, 'Data berhasil diexport ke $path')
+        : null;
+  }
+
+  importDataFromCSV() {}
 }

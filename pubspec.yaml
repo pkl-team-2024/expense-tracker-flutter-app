@@ -44,6 +44,8 @@ dependencies:
   flutter_image_compress:
   provider:
   simple_gradient_text:
+  csv:
+  path_provider:
 
 
 dev_dependencies:

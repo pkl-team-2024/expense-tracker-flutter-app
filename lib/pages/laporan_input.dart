@@ -11,7 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 class LaporanInput extends StatefulWidget {
-  const LaporanInput({super.key});
+  LaporanHiveModel? laporan;
+
+  LaporanInput({super.key, this.laporan});
 
   @override
   State<LaporanInput> createState() => _LaporanInputState();
@@ -27,6 +29,7 @@ class _LaporanInputState extends State<LaporanInput> {
     'amount': 0.0,
     'isIncome': true,
   };
+  bool _isEditing = false;
 
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
@@ -142,7 +145,12 @@ class _LaporanInputState extends State<LaporanInput> {
     if (source == null) return;
 
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: source!);
+    XFile? image;
+    try {
+      image = await picker.pickImage(source: source!);
+    } catch (e) {
+      ShowSnackBar().show(context, 'Gambar tidak dapat dipilih');
+    }
 
     if (image != null) {
       final compressedImage = await _compressImage(File(image.path));
@@ -153,7 +161,7 @@ class _LaporanInputState extends State<LaporanInput> {
 
         setState(() {
           _selectedImage = compressedFile;
-          _selectedImageName = image.name;
+          _selectedImageName = image!.name;
         });
       } else {
         ShowSnackBar().show(context, 'Gambar tidak dapat dikompres');
@@ -206,6 +214,19 @@ class _LaporanInputState extends State<LaporanInput> {
   void initState() {
     super.initState();
     _controller.text = _laporan['amount'].toString();
+
+    if (widget.laporan != null) {
+      final laporan = widget.laporan!;
+      _laporan['laporanType'] = laporan.isIncome ? 'Pemasukan' : 'Pengeluaran';
+      _laporan['category'] = laporan.category;
+      _laporan['date'] = laporan.date;
+      _laporan['amount'] = laporan.amount;
+      _laporan['isIncome'] = laporan.isIncome;
+      _selectedImage =
+          laporan.image != null ? File.fromRawPath(laporan.image!) : null;
+      _selectedImageName = laporan.imageName ?? '';
+      _isEditing = true;
+    }
   }
 
   @override
@@ -218,59 +239,67 @@ class _LaporanInputState extends State<LaporanInput> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Input Laporan'),
+      ),
       resizeToAvoidBottomInset: false,
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 40),
-            buildPreview(),
-            buildImageInput(),
-            buildDateInput(),
-            buildAmountInput(),
-            buildCategoryInput(),
-            const Spacer(),
-            buildLaporanTypeButton(),
-            const SizedBox(height: 8),
-            buildButton(
-              context,
-              type: 'primary',
-              text: 'Submit',
-              icon: Icons.send,
-              onPressed: () {
-                if (_laporan['amount'] == 0) {
-                  ShowSnackBar().show(context, 'Jumlah tidak boleh 0');
-                  return;
-                }
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              buildPreview(),
+              buildImageInput(),
+              buildDateInput(),
+              buildAmountInput(),
+              buildCategoryInput(),
+              const SizedBox(height: 16),
+              buildLaporanTypeButton(),
+              const SizedBox(height: 8),
+              buildButton(
+                context,
+                type: 'primary',
+                text: 'Submit',
+                icon: Icons.send,
+                onPressed: () {
+                  if (_laporan['amount'] == 0) {
+                    ShowSnackBar().show(context, 'Jumlah tidak boleh 0');
+                    return;
+                  }
 
-                LaporanHiveModel laporan = LaporanHiveModel(
-                  id: DateTime.now().toString(),
-                  isIncome: _laporan['isIncome'],
-                  category: _laporan['category'],
-                  date: _laporan['date'],
-                  amount: _laporan['amount'],
-                  image: _selectedImage != null
-                      ? Uint8List.fromList(_selectedImage!.readAsBytesSync())
-                      : null,
-                  imageName:
-                      _selectedImageName != '' ? _selectedImageName : null,
-                );
-                _repository.store(laporan);
-                Navigator.pop(context, true);
-              },
-            ),
-            const SizedBox(height: 8),
-            buildButton(
-              context,
-              type: 'secondary',
-              text: 'Cancel',
-              icon: Icons.close,
-              onPressed: () {
-                Navigator.pop(context);
-              },
-            ),
-          ],
+                  LaporanHiveModel laporan = LaporanHiveModel(
+                    id: _isEditing
+                        ? widget.laporan!.id
+                        : DateTime.now().toString(),
+                    isIncome: _laporan['isIncome'],
+                    category: _laporan['category'],
+                    date: _laporan['date'],
+                    amount: _laporan['amount'],
+                    image: _selectedImage != null
+                        ? Uint8List.fromList(_selectedImage!.readAsBytesSync())
+                        : null,
+                    imageName:
+                        _selectedImageName != '' ? _selectedImageName : null,
+                  );
+                  _isEditing
+                      ? _repository.update(laporan)
+                      : _repository.store(laporan);
+                  Navigator.pop(context, true);
+                },
+              ),
+              const SizedBox(height: 8),
+              buildButton(
+                context,
+                type: 'secondary',
+                text: 'Cancel',
+                icon: Icons.close,
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -304,7 +333,7 @@ class _LaporanInputState extends State<LaporanInput> {
                           ? Icons.arrow_downward_rounded
                           : Icons.arrow_upward_rounded,
                       color: _laporan['isIncome'] ? Colors.green : Colors.red,
-                      size: 48,
+                      size: 38,
                     ),
                   ],
                 ),
@@ -324,7 +353,7 @@ class _LaporanInputState extends State<LaporanInput> {
                     Text(
                       formatRupiah(_laporan['amount']),
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: 18,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
