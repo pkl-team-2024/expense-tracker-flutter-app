@@ -14,11 +14,9 @@ import 'package:finance_tracker/pages/laporan_input.dart';
 import 'package:finance_tracker/repository/laporan_repository.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:intl/intl.dart';
 import 'package:overlay_support/overlay_support.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 class Home extends StatefulWidget {
@@ -29,15 +27,15 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  static const Map<String, IconData> _tabs = {
-    'Home': Icons.home,
-    'Settings': Icons.settings,
-    'Profile': Icons.account_circle,
-    'Notifications': Icons.notifications,
-  };
-
   final LaporanRepository _repository = LaporanRepository();
   List<LaporanHiveModel> _laporans = [];
+  List<LaporanHiveModel>? _laporansFiltered;
+  final Map<String, dynamic> _currentActiveFilter = {
+    'laporan_type': '',
+    'category': '',
+    'date-range': '',
+    'imageOnly': false,
+  };
 
   @override
   void initState() {
@@ -50,70 +48,12 @@ class _HomeState extends State<Home> {
     var thisMonth = DateTime.now().month;
     double thisMonthAmount = getAmount(thisMonth);
     double allAmount = getAmount(null);
-    bool isPositive = allAmount >= 0;
-    double screenHeight = MediaQuery.of(context).size.height;
+    Map<String, int> categoryAmountMap = getCategoryGroupedAmount(_laporans);
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         actions: [
-          IconButton(
-            onPressed: () async {
-              try {
-                final Map<String, Function> operations = {
-                  'Import Data': () async {
-                    await importDataFromCSV(_repository);
-                  },
-                  'Export Data': () async {
-                    await exportDataToCSV(_laporans, beforeImport: false);
-                  },
-                  'Cancel': () {},
-                };
-
-                String operation = await modalBottomSheetComponent(
-                      context: context,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListView.builder(
-                            shrinkWrap: true,
-                            itemCount: operations.keys.length,
-                            itemBuilder: (context, index) {
-                              final operation =
-                                  operations.keys.elementAt(index);
-                              return GestureDetector(
-                                onTap: () {
-                                  Navigator.of(context).pop(operation);
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.only(
-                                    top: 8,
-                                    bottom: 8,
-                                    left: 8,
-                                  ),
-                                  child: Text(operation,
-                                      style: const TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w500,
-                                      )),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ) ??
-                    'Cancel';
-
-                operations[operation]!();
-              } catch (e) {
-                ShowSnackBar().show(context, 'Gagal export data: $e');
-              }
-            },
-            icon: const Icon(
-              CupertinoIcons.folder_solid,
-              color: Colors.white,
-            ),
-          ),
+          buildImportExport(context),
           Consumer<ThemeProvider>(
             builder: (context, themeProvider, child) {
               return IconButton(
@@ -158,29 +98,7 @@ class _HomeState extends State<Home> {
           ? Theme.of(context).colorScheme.primary
           : Theme.of(context).colorScheme.primaryContainer,
       body: _laporans.isEmpty
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 100),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      CupertinoIcons.money_dollar,
-                      color: Colors.white.withOpacity(0.5),
-                      size: 64,
-                    ),
-                    Text(
-                      'Belum ada data',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
+          ? buildNoDataScreen()
           : Column(
               children: [
                 buildOverview(thisMonthAmount, allAmount),
@@ -194,129 +112,431 @@ class _HomeState extends State<Home> {
                       ),
                     ),
                     child: Padding(
-                      padding:
-                          const EdgeInsets.only(top: 16, left: 8, right: 8),
-                      child: ListView.builder(
-                        itemCount: _laporans.length,
-                        itemBuilder: (context, index) {
-                          final laporan = _laporans[index];
-                          return Padding(
-                            padding: index == _laporans.length - 1
-                                ? const EdgeInsets.only(
-                                    top: 4,
-                                    bottom: 4,
-                                  )
-                                : const EdgeInsets.only(
-                                    top: 4,
-                                    bottom: 0,
-                                  ),
-                            child: InkWell(
-                              onTap: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  backgroundColor: Colors.transparent,
-                                  isDismissible: true,
-                                  builder: (BuildContext context) {
-                                    return buildLaporanDrawer(context, laporan);
-                                  },
-                                );
-                              },
-                              child: Container(
-                                height: 80,
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: laporan.isIncome == true
-                                      ? Colors.green.withOpacity(0.1)
-                                      : Colors.red.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: 8,
-                                    right: 16,
-                                  ),
+                      padding: const EdgeInsets.only(top: 8, left: 8, right: 8),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () async {
+                                  await modalBottomSheetComponent(
+                                    context: context,
+                                    child: StatefulBuilder(builder:
+                                        (BuildContext context,
+                                            StateSetter setState) {
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const SizedBox(height: 16),
+                                          InkWell(
+                                            onTap: () async {
+                                              DateTimeRange? picked =
+                                                  await showDateRangePicker(
+                                                context: context,
+                                                firstDate: DateTime(2000),
+                                                lastDate: DateTime.now(),
+                                              );
+                                              if (picked != null) {
+                                                setFilter('date-range', picked);
+                                                setState(() {});
+                                              }
+                                            },
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              padding: const EdgeInsets.all(16),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        'Pilih Tanggal',
+                                                        style: TextStyle(
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .colorScheme
+                                                                  .onSurface,
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Text(
+                                                        _currentActiveFilter[
+                                                                    'date-range'] !=
+                                                                ''
+                                                            ? DateFormat(
+                                                                        'dd MMM')
+                                                                    .format(_currentActiveFilter[
+                                                                            'date-range']
+                                                                        .start) +
+                                                                ' - ' +
+                                                                DateFormat(
+                                                                        'dd MMM')
+                                                                    .format(_currentActiveFilter[
+                                                                            'date-range']
+                                                                        .end)
+                                                            : '',
+                                                        style: TextStyle(
+                                                          color:
+                                                              Theme.of(context)
+                                                                  .colorScheme
+                                                                  .onSurface,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  InkWell(
+                                                    onTap: () {
+                                                      if (_currentActiveFilter[
+                                                              'date-range'] !=
+                                                          '') {
+                                                        setFilter(
+                                                            'date-range', '');
+                                                        setState(() {});
+                                                      }
+                                                    },
+                                                    child: Icon(
+                                                      _currentActiveFilter[
+                                                                  'date-range'] !=
+                                                              ''
+                                                          ? Icons.cancel
+                                                          : CupertinoIcons
+                                                              .calendar,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          InkWell(
+                                            onTap: () async {
+                                              setFilter(
+                                                  'imageOnly',
+                                                  !_currentActiveFilter[
+                                                      'imageOnly']);
+                                              setState(() {});
+                                            },
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .surfaceContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              padding: const EdgeInsets.all(16),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    'Hanya Data Bergambar',
+                                                    style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurface,
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  Icon(
+                                                    _currentActiveFilter[
+                                                            'imageOnly']
+                                                        ? Icons.check_box
+                                                        : Icons
+                                                            .check_box_outline_blank,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              buildSelectButton(
+                                                _currentActiveFilter[
+                                                    'laporan_type'],
+                                                'Pemasukan',
+                                                (value) {
+                                                  setFilter(
+                                                      'laporan_type',
+                                                      _currentActiveFilter[
+                                                                  'laporan_type'] ==
+                                                              value
+                                                          ? ''
+                                                          : value);
+                                                  setState(() {});
+                                                },
+                                                Colors.green,
+                                                Icons.arrow_downward_rounded,
+                                              ),
+                                              SizedBox(width: 8),
+                                              buildSelectButton(
+                                                _currentActiveFilter[
+                                                    'laporan_type'],
+                                                'Pengeluaran',
+                                                (value) {
+                                                  setFilter(
+                                                      'laporan_type',
+                                                      _currentActiveFilter[
+                                                                  'laporan_type'] ==
+                                                              value
+                                                          ? ''
+                                                          : value);
+                                                  setState(() {});
+                                                },
+                                                Colors.red,
+                                                Icons.arrow_upward_rounded,
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      );
+                                    }),
+                                  );
+                                },
+                                icon: const Icon(
+                                    CupertinoIcons.slider_horizontal_3),
+                                label: const Text('Filter'),
+                              ),
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
                                   child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            children: [
-                                              Icon(
-                                                laporan.isIncome == true
-                                                    ? Icons
-                                                        .arrow_downward_rounded
-                                                    : Icons
-                                                        .arrow_upward_rounded,
-                                                color: laporan.isIncome == true
-                                                    ? Colors.green
-                                                    : Colors.red,
-                                                size: 38,
+                                    children: List.generate(
+                                      categoryAmountMap.keys.length,
+                                      (index) => Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 4.0),
+                                          child: InkWell(
+                                            onTap: () {
+                                              if (_currentActiveFilter[
+                                                      'category'] ==
+                                                  categoryAmountMap.keys
+                                                      .elementAt(index)
+                                                      .toString()) {
+                                                setFilter('category', '');
+                                              } else {
+                                                setFilter(
+                                                    'category',
+                                                    categoryAmountMap.keys
+                                                        .elementAt(index));
+                                              }
+                                            },
+                                            child: Container(
+                                              decoration: BoxDecoration(
+                                                color: _currentActiveFilter[
+                                                            'category'] ==
+                                                        categoryAmountMap.keys
+                                                            .elementAt(index)
+                                                            .toString()
+                                                    ? Theme.of(context)
+                                                        .colorScheme
+                                                        .primaryContainer
+                                                    : Theme.of(context)
+                                                        .colorScheme
+                                                        .surfaceContainer,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
-                                            ],
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                laporan.category,
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Colors.grey,
-                                                ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 8,
                                               ),
-                                              Text(
-                                                formatRupiah(laporan.amount),
-                                                style: const TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
+                                              child: Row(
+                                                children: [
+                                                  Text(
+                                                    categoryAmountMap.keys
+                                                        .elementAt(index),
+                                                    style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurface,
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Text(
+                                                    categoryAmountMap[
+                                                            categoryAmountMap
+                                                                .keys
+                                                                .elementAt(
+                                                                    index)]!
+                                                        .toString(),
+                                                    style: TextStyle(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurface,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                      Column(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            laporan.image == null
-                                                ? 'Tanpa gambar'
-                                                : 'Dengan gambar',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey,
                                             ),
-                                          ),
-                                          Text(
-                                            DateFormat('dd MMM yyyy')
-                                                .format(laporan.date),
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                    ],
+                                          )),
+                                    ),
                                   ),
                                 ),
                               ),
+                            ],
+                          ),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: _laporansFiltered == null
+                                  ? _laporans.length
+                                  : _laporansFiltered!.length,
+                              itemBuilder: (context, index) {
+                                final laporan = _laporansFiltered == null
+                                    ? _laporans[index]
+                                    : _laporansFiltered![index];
+                                return Padding(
+                                  padding: index ==
+                                          (_laporansFiltered == null
+                                              ? _laporans.length - 1
+                                              : _laporansFiltered!.length - 1)
+                                      ? const EdgeInsets.only(
+                                          top: 4,
+                                          bottom: 4,
+                                        )
+                                      : const EdgeInsets.only(
+                                          top: 4,
+                                          bottom: 0,
+                                        ),
+                                  child: InkWell(
+                                    onTap: () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        isScrollControlled: true,
+                                        backgroundColor: Colors.transparent,
+                                        isDismissible: true,
+                                        builder: (BuildContext context) {
+                                          return buildLaporanDrawer(
+                                              context, laporan);
+                                        },
+                                      );
+                                    },
+                                    child: Container(
+                                      height: 80,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: laporan.isIncome == true
+                                            ? Colors.green.withOpacity(0.1)
+                                            : Colors.red.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 8,
+                                          right: 16,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      laporan.isIncome == true
+                                                          ? Icons
+                                                              .arrow_downward_rounded
+                                                          : Icons
+                                                              .arrow_upward_rounded,
+                                                      color: laporan.isIncome ==
+                                                              true
+                                                          ? Colors.green
+                                                          : Colors.red,
+                                                      size: 38,
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      laporan.category,
+                                                      style: const TextStyle(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color: Colors.grey,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      formatRupiah(
+                                                          laporan.amount),
+                                                      style: const TextStyle(
+                                                        fontSize: 18,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                            Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  laporan.image == null
+                                                      ? 'Tanpa gambar'
+                                                      : 'Dengan gambar',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  DateFormat('dd MMM yyyy')
+                                                      .format(laporan.date),
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -346,13 +566,103 @@ class _HomeState extends State<Home> {
     );
   }
 
+  Center buildNoDataScreen() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 100),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              CupertinoIcons.money_dollar,
+              color: Colors.white.withOpacity(0.5),
+              size: 64,
+            ),
+            Text(
+              'Belum ada data',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.5),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconButton buildImportExport(BuildContext context) {
+    return IconButton(
+      onPressed: () async {
+        try {
+          final Map<String, Function> operations = {
+            'Import Data': () async {
+              await importDataFromCSV(_repository);
+            },
+            'Export Data': () async {
+              await exportDataToCSV(_laporans, beforeImport: false);
+            },
+            'Cancel': () {},
+          };
+
+          String operation = await modalBottomSheetComponent(
+                context: context,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: operations.keys.length,
+                      itemBuilder: (context, index) {
+                        final operation = operations.keys.elementAt(index);
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).pop(operation);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.only(
+                              top: 8,
+                              bottom: 8,
+                              left: 8,
+                            ),
+                            child: Text(operation,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w500,
+                                )),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ) ??
+              'Cancel';
+
+          operations[operation]!();
+        } catch (e) {
+          showSimpleNotification(
+            Text('Gagal: $e'),
+            background: Colors.red,
+            duration: const Duration(milliseconds: 1000),
+          );
+        }
+      },
+      icon: const Icon(
+        CupertinoIcons.folder_solid,
+        color: Colors.white,
+      ),
+    );
+  }
+
   Padding buildOverview(double thisMonthAmount, double allAmount) {
     return Padding(
       padding: const EdgeInsets.only(
         left: 16,
         right: 16,
         top: 24,
-        bottom: 24,
+        bottom: 36,
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -710,39 +1020,20 @@ class _HomeState extends State<Home> {
                       backgroundColor: WidgetStateProperty.all(Colors.black),
                     ),
                     onPressed: () async {
-                      var status = await Permission.storage.request();
-                      if (!status.isGranted) {
-                        showSimpleNotification(
-                          const Text(
-                              'Gagal menyimpan gambar: Izin tidak diberikan'),
-                          background: Colors.red,
-                          duration: const Duration(milliseconds: 500),
-                        );
-                        return;
-                      }
+                      final directory = Platform.isAndroid
+                          ? Directory('/storage/emulated/0/Download')
+                          : await getApplicationDocumentsDirectory();
 
-                      final result = await ImageGallerySaver.saveImage(
-                        Uint8List.fromList(laporan.image!),
-                        quality: 100,
-                        name:
-                            'image_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}',
+                      final path =
+                          '${directory.path}/${laporan.category}-${DateFormat('yyyyMMdd_HHmmss').format(laporan.date)}.png';
+                      final file = File(path);
+                      await file.writeAsBytes(laporan.image!);
+
+                      showSimpleNotification(
+                        Text('Gambar berhasil diexport ke $path'),
+                        background: Colors.green,
+                        duration: const Duration(milliseconds: 500),
                       );
-
-                      if (result['isSuccess']) {
-                        showSimpleNotification(
-                          const Text('Gambar berhasil disimpan ke galeri'),
-                          background: Colors.green,
-                          duration: const Duration(milliseconds: 500),
-                          position: NotificationPosition.bottom,
-                        );
-                      } else {
-                        showSimpleNotification(
-                          const Text('Gagal menyimpan gambar'),
-                          background: Colors.red,
-                          duration: const Duration(milliseconds: 500),
-                          position: NotificationPosition.bottom,
-                        );
-                      }
                     },
                   ),
                 ),
@@ -818,12 +1109,9 @@ class _HomeState extends State<Home> {
     }
 
     String csv = const ListToCsvConverter().convert(rows);
-    final directory = await getExternalStorageDirectory();
-    if (directory == null) {
-      ShowSnackBar()
-          .show(context, 'Gagal export data: Directory tidak ditemukan');
-      return;
-    }
+    final directory = Platform.isAndroid
+        ? Directory('/storage/emulated/0/Download')
+        : await getApplicationDocumentsDirectory();
     final dateTime = DateTime.now();
     final formattedDateTime = DateFormat('yyyyMMdd_HHmmss').format(dateTime);
     final path =
@@ -832,7 +1120,11 @@ class _HomeState extends State<Home> {
     await file.writeAsString(csv);
 
     !beforeImport
-        ? ShowSnackBar().show(context, 'Data berhasil diexport ke $path')
+        ? showSimpleNotification(
+            Text('Data berhasil diexport ke $path'),
+            background: Colors.green,
+            duration: const Duration(milliseconds: 1000),
+          )
         : null;
   }
 
@@ -871,12 +1163,130 @@ class _HomeState extends State<Home> {
         await repository.importData(laporans);
         _fetchLaporan(context);
       } catch (e) {
-        ShowSnackBar().show(context, 'Gagal import data: $e');
+        showSimpleNotification(
+          Text('Gagal import data: $e'),
+          background: Colors.red,
+          duration: const Duration(milliseconds: 1000),
+        );
       }
 
-      ShowSnackBar().show(context, 'Data berhasil diimport');
+      showSimpleNotification(
+        const Text('Data berhasil diimport'),
+        background: Colors.green,
+        duration: const Duration(milliseconds: 1000),
+      );
     } else {
-      ShowSnackBar().show(context, 'Gagal memilih file');
+      showSimpleNotification(
+        const Text('Gagal memilih file'),
+        background: Colors.red,
+        duration: const Duration(milliseconds: 1000),
+      );
     }
+  }
+
+  List<String> getAvailableCategory(List<LaporanHiveModel> laporans) {
+    return laporans.map((laporan) => laporan.category).toSet().toList();
+  }
+
+  Map<String, int> getCategoryGroupedAmount(List<LaporanHiveModel> laporans) {
+    Map<String, int> categoryAmount = {};
+    for (var laporan in laporans) {
+      if (categoryAmount.containsKey(laporan.category)) {
+        categoryAmount[laporan.category] =
+            categoryAmount[laporan.category]! + 1;
+      } else {
+        categoryAmount[laporan.category] = 1;
+      }
+    }
+    return categoryAmount;
+  }
+
+  void setFilter(String category, dynamic value) {
+    setState(() {
+      _currentActiveFilter[category] = value;
+      _laporansFiltered = getFilteredLaporan(_laporans, _currentActiveFilter);
+    });
+  }
+
+  Expanded buildSelectButton(String selectedValue, String value,
+      void Function(String) onChanged, Color color, IconData icon) {
+    return Expanded(
+      child: SizedBox(
+        width: double.infinity,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          transform: Matrix4.translationValues(
+            0,
+            selectedValue == value ? -2 : 0,
+            0,
+          ),
+          child: TextButton(
+            onPressed: () {
+              onChanged(value);
+            },
+            style: ButtonStyle(
+              shape: WidgetStateProperty.all(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              backgroundColor: WidgetStateProperty.all(
+                selectedValue == value ? color : color.withOpacity(0.1),
+              ),
+              foregroundColor: WidgetStateProperty.all(
+                selectedValue == value ? Colors.white : color,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(icon),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<LaporanHiveModel>? getFilteredLaporan(List<LaporanHiveModel> laporans,
+      Map<String, dynamic> currentActiveFilter) {
+    return laporans.where((laporan) {
+      if (currentActiveFilter['laporan_type'] != '' &&
+          (currentActiveFilter['laporan_type'] == 'Pemasukan' &&
+                  !laporan.isIncome ||
+              currentActiveFilter['laporan_type'] == 'Pengeluaran' &&
+                  laporan.isIncome)) {
+        return false;
+      }
+
+      if (currentActiveFilter['category'] != '' &&
+          laporan.category != currentActiveFilter['category']) {
+        return false;
+      }
+
+      if (currentActiveFilter['date-range'] != '' &&
+          (laporan.date.isBefore(currentActiveFilter['date-range'].start) ||
+              laporan.date.isAfter(currentActiveFilter['date-range'].end))) {
+        return false;
+      }
+
+      if (currentActiveFilter['imageOnly'] && laporan.image == null) {
+        return false;
+      }
+
+      return true;
+    }).toList();
   }
 }
