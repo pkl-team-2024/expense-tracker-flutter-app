@@ -552,7 +552,7 @@ class _HomeState extends State<Home> {
           bool? shouldRefresh = await Navigator.push(
               context, MaterialPageRoute(builder: (context) => LaporanInput()));
 
-          shouldRefresh ??= false;
+          shouldRefresh ??= true;
 
           if (shouldRefresh) {
             _fetchLaporan(context);
@@ -1211,8 +1211,9 @@ class _HomeState extends State<Home> {
   Expanded buildSelectButton(String selectedValue, String value,
       void Function(String) onChanged, Color color, IconData icon) {
     return Expanded(
-      child: SizedBox(
+      child: Container(
         width: double.infinity,
+        constraints: BoxConstraints(minHeight: Platform.isWindows ? 50 : 0),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           transform: Matrix4.translationValues(

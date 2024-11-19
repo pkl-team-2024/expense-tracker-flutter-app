@@ -44,108 +44,114 @@ class _LaporanInputState extends State<LaporanInput> {
 
   Future<void> _pickImage() async {
     ImageSource? source;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      isDismissible: true,
-      builder: (BuildContext context) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _focusNode.requestFocus();
-        });
-        return GestureDetector(
-          onTap: () {
-            Navigator.of(context).pop();
-          },
-          child: Container(
-            color: Colors.transparent,
-            child: GestureDetector(
-              onTap: () {},
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                child: Container(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).canvasColor,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
+    if (Platform.isAndroid || Platform.isIOS) {
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        isDismissible: true,
+        builder: (BuildContext context) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _focusNode.requestFocus();
+          });
+          return GestureDetector(
+            onTap: () {
+              Navigator.of(context).pop();
+            },
+            child: Container(
+              color: Colors.transparent,
+              child: GestureDetector(
+                onTap: () {},
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: Container(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
                     ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              height: 5.0,
-                              width: 100.0,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                borderRadius: BorderRadius.circular(10.0),
-                              ),
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        TextButton(
-                          onPressed: () {
-                            source = ImageSource.camera;
-                            Navigator.pop(context);
-                          },
-                          child: Row(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).canvasColor,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.camera_alt),
-                              const SizedBox(width: 8),
-                              Text('Kamera',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
-                                  )),
+                              Container(
+                                height: 5.0,
+                                width: 100.0,
+                                decoration: BoxDecoration(
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
+                                  borderRadius: BorderRadius.circular(10.0),
+                                ),
+                              )
                             ],
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            source = ImageSource.gallery;
-                            Navigator.pop(context);
-                          },
-                          child: Row(
-                            children: [
-                              const Icon(Icons.photo),
-                              const SizedBox(width: 8),
-                              Text('Galeri',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    color:
-                                        Theme.of(context).colorScheme.onSurface,
-                                  )),
-                            ],
+                          const SizedBox(height: 16),
+                          TextButton(
+                            onPressed: () {
+                              source = ImageSource.camera;
+                              Navigator.pop(context);
+                            },
+                            child: Row(
+                              children: [
+                                const Icon(Icons.camera_alt),
+                                const SizedBox(width: 8),
+                                Text('Kamera',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
+                                    )),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                          TextButton(
+                            onPressed: () {
+                              source = ImageSource.gallery;
+                              Navigator.pop(context);
+                            },
+                            child: Row(
+                              children: [
+                                const Icon(Icons.photo),
+                                const SizedBox(width: 8),
+                                Text('Galeri',
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
+                                    )),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-      },
-    );
-
+          );
+        },
+      );
+    } else {
+      source = ImageSource.gallery;
+    }
     if (source == null) return;
 
     final ImagePicker picker = ImagePicker();
     XFile? image;
+
     try {
       image = await picker.pickImage(source: source!);
     } catch (e) {
@@ -153,10 +159,12 @@ class _LaporanInputState extends State<LaporanInput> {
     }
 
     if (image != null) {
-      final compressedImage = await _compressImage(File(image.path));
+      final compressedImage = Platform.isWindows
+          ? File(image.path).readAsBytesSync()
+          : await _compressImage(File(image.path));
 
       if (compressedImage != null) {
-        final compressedFile = File('${image.path}_compressed.jpg')
+        File compressedFile = File('${image.path}_compressed.jpg')
           ..writeAsBytesSync(compressedImage);
 
         setState(() {
@@ -249,55 +257,67 @@ class _LaporanInputState extends State<LaporanInput> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              buildPreview(),
-              buildImageInput(),
-              buildDateInput(),
-              buildAmountInput(),
-              buildCategoryInput(),
-              const SizedBox(height: 16),
-              buildLaporanTypeButton(),
-              const SizedBox(height: 8),
-              buildButton(
-                context,
-                type: 'primary',
-                text: 'Submit',
-                icon: Icons.send,
-                onPressed: () {
-                  if (_laporan['amount'] == 0) {
-                    ShowSnackBar().show(context, 'Jumlah tidak boleh 0');
-                    return;
-                  }
+              Center(
+                child: Container(
+                  constraints: BoxConstraints(maxWidth: 800),
+                  child: Column(
+                    children: [
+                      buildPreview(),
+                      buildImageInput(),
+                      buildDateInput(),
+                      buildAmountInput(),
+                      buildCategoryInput(),
+                      const SizedBox(height: 16),
+                      buildLaporanTypeButton(),
+                      const SizedBox(height: 8),
+                      buildButton(
+                        context,
+                        type: 'primary',
+                        text: 'Submit',
+                        icon: Icons.send,
+                        onPressed: () {
+                          if (_laporan['amount'] == 0) {
+                            ShowSnackBar()
+                                .show(context, 'Jumlah tidak boleh 0');
+                            return;
+                          }
 
-                  LaporanHiveModel laporan = LaporanHiveModel(
-                    id: _isEditing
-                        ? widget.laporan!.id
-                        : DateTime.now().toString(),
-                    isIncome: _laporan['isIncome'],
-                    category: _laporan['category'],
-                    date: _laporan['date'],
-                    amount: _laporan['amount'],
-                    image: _selectedImage != null
-                        ? Uint8List.fromList(_selectedImage!.readAsBytesSync())
-                        : null,
-                    imageName:
-                        _selectedImageName != '' ? _selectedImageName : null,
-                  );
-                  _isEditing
-                      ? _repository.update(laporan)
-                      : _repository.store(laporan);
-                  Navigator.pop(context, true);
-                },
-              ),
-              const SizedBox(height: 8),
-              buildButton(
-                context,
-                type: 'secondary',
-                text: 'Cancel',
-                icon: Icons.close,
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-              ),
+                          LaporanHiveModel laporan = LaporanHiveModel(
+                            id: _isEditing
+                                ? widget.laporan!.id
+                                : DateTime.now().toString(),
+                            isIncome: _laporan['isIncome'],
+                            category: _laporan['category'],
+                            date: _laporan['date'],
+                            amount: _laporan['amount'],
+                            image: _selectedImage != null
+                                ? Uint8List.fromList(
+                                    _selectedImage!.readAsBytesSync())
+                                : null,
+                            imageName: _selectedImageName != ''
+                                ? _selectedImageName
+                                : null,
+                          );
+                          _isEditing
+                              ? _repository.update(laporan)
+                              : _repository.store(laporan);
+                          Navigator.pop(context, true);
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      buildButton(
+                        context,
+                        type: 'secondary',
+                        text: 'Cancel',
+                        icon: Icons.close,
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              )
             ],
           ),
         ),
@@ -393,14 +413,15 @@ class _LaporanInputState extends State<LaporanInput> {
     return formatter.format(amount);
   }
 
-  SizedBox buildButton(BuildContext context,
+  Widget buildButton(BuildContext context,
       {String type = 'primary',
       String text = 'Submit',
       IconData? icon = Icons.send,
       double gap = 4,
       void Function()? onPressed}) {
-    return SizedBox(
+    return Container(
       width: double.infinity,
+      constraints: BoxConstraints(minHeight: Platform.isWindows ? 50 : 40),
       child: TextButton(
         onPressed: () {
           onPressed != null ? onPressed() : null;
@@ -491,38 +512,42 @@ class _LaporanInputState extends State<LaporanInput> {
             selectedValue == value ? -2 : 0,
             0,
           ),
-          child: TextButton(
-            onPressed: () {
-              onChanged(value);
-            },
-            style: ButtonStyle(
-              shape: WidgetStateProperty.all(
-                RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+          child: Container(
+            constraints:
+                BoxConstraints(minHeight: Platform.isWindows ? 50 : 20),
+            child: TextButton(
+              onPressed: () {
+                onChanged(value);
+              },
+              style: ButtonStyle(
+                shape: WidgetStateProperty.all(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                backgroundColor: WidgetStateProperty.all(
+                  selectedValue == value ? color : color.withOpacity(0.1),
+                ),
+                foregroundColor: WidgetStateProperty.all(
+                  selectedValue == value ? Colors.white : color,
                 ),
               ),
-              backgroundColor: WidgetStateProperty.all(
-                selectedValue == value ? color : color.withOpacity(0.1),
-              ),
-              foregroundColor: WidgetStateProperty.all(
-                selectedValue == value ? Colors.white : color,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(4.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+              child: Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(icon),
-                ],
+                    const SizedBox(width: 8),
+                    Icon(icon),
+                  ],
+                ),
               ),
             ),
           ),
