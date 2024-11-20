@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:finance_tracker/components/category_drawer.dart';
-import 'package:finance_tracker/components/snackbar.dart';
+import 'package:finance_tracker/past/components/category_drawer.dart';
+import 'package:finance_tracker/past/components/snackbar.dart';
 import 'package:finance_tracker/models/laporan_model.dart';
 import 'package:finance_tracker/repository/laporan_repository.dart';
 import 'package:flutter/cupertino.dart';

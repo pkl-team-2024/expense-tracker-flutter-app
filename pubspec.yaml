@@ -47,7 +47,7 @@ dependencies:
   csv:
   path_provider:
   overlay_support:
-  image_compression_flutter:
+  shared_preferences: ^2.3.3
 
 dev_dependencies:
   flutter_test:
