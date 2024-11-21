@@ -43,7 +43,8 @@ class _HomeState extends State<Home> {
   bool isLaporanFilterEmpty() =>
       _laporanFilter['laporan_type'].isEmpty &&
       _laporanFilter['category'].isEmpty &&
-      _laporanFilter['date-range'] == '';
+      _laporanFilter['date-range'] == '' &&
+      !_laporanFilter['imageOnly'];
 
   @override
   void initState() {
@@ -188,6 +189,13 @@ class _HomeState extends State<Home> {
                         await handler(true);
                         _laporanRepository.delete(laporan.id);
                         _laporanList.removeAt(index);
+                        if (laporan.isIncome) {
+                          _thisMonthAmount -= laporan.amount;
+                          _totalAmount -= laporan.amount;
+                        } else {
+                          _thisMonthAmount += laporan.amount;
+                          _totalAmount += laporan.amount;
+                        }
                         setState(() {});
                       },
                       color: Colors.red,
