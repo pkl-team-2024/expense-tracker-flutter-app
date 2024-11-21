@@ -38,37 +38,44 @@ void notify(
 }) {
   showOverlayNotification(
     (context) {
-      return Card(
-        margin: Platform.isAndroid
-            ? const EdgeInsets.only(
-                top: 42,
-                left: 16,
-                right: 16,
-                bottom: 16,
-              )
-            : const EdgeInsets.all(16),
-        child: Padding(
-          padding: const EdgeInsets.only(
-            top: 16,
-            bottom: 16,
-            left: 16,
-            right: 16,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                notifySeverityMap[severity]!['icon'],
-                color: notifySeverityMap[severity]!['color'],
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                message ?? notifySeverityMap[severity]!['defaultLabel'],
-                style:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.w500),
-              ),
-            ],
+      return Dismissible(
+        key: UniqueKey(),
+        direction: DismissDirection.up,
+        onDismissed: (_) {
+          OverlaySupportEntry.of(context)?.dismiss(animate: false);
+        },
+        child: Card(
+          margin: Platform.isAndroid
+              ? const EdgeInsets.only(
+                  top: 42,
+                  left: 16,
+                  right: 16,
+                  bottom: 16,
+                )
+              : const EdgeInsets.all(16),
+          child: Padding(
+            padding:
+                const EdgeInsets.only(top: 14, bottom: 14, left: 14, right: 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Icon(
+                  notifySeverityMap[severity]!['icon'],
+                  color: notifySeverityMap[severity]!['color'],
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    message ?? notifySeverityMap[severity]!['defaultLabel'],
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w500),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       );

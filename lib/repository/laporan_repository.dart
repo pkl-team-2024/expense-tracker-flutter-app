@@ -16,11 +16,15 @@ class LaporanRepository {
     List<LaporanHiveModel> laporanList = box.values.toList();
     double amount = getAmount(null, laporanList);
     double thisMonthAmount = getAmount(DateTime.now().month, laporanList);
+    List<String> categoryList =
+        laporanList.map((e) => e.category).toSet().toList();
     laporanList = filterLaporan(filter, laporanList);
+
     return {
       'laporanList': laporanList,
       'amount': amount,
       'thisMonthAmount': thisMonthAmount,
+      'categoryList': categoryList,
     };
   }
 
@@ -73,10 +77,12 @@ class LaporanRepository {
 
       if (filter['date-range'] != null && filter['date-range'] != '') {
         DateTime startDate = filter['date-range'].start;
-        DateTime endDate = filter['date-range'].end;
+        DateTime endDate =
+            filter['date-range'].end.add(const Duration(days: 1));
         laporanList = laporanList
-            .where((laporan) => !(laporan.date.isBefore(startDate) ||
-                laporan.date.isAfter(endDate)))
+            .where((laporan) =>
+                !laporan.date.isBefore(startDate) &&
+                laporan.date.isBefore(endDate))
             .toList();
       }
 

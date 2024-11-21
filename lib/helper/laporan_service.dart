@@ -1,6 +1,6 @@
 import 'package:finance_tracker/models/laporan_model.dart';
 
-double getAmount(int? month, List<LaporanHiveModel> laporans) {
+double getAmount(int? month, List<dynamic> laporans) {
   var laporan = month == null
       ? laporans
       : laporans.where((laporan) => laporan.date.month == month);

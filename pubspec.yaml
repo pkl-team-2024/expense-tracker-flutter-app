@@ -48,6 +48,7 @@ dependencies:
   path_provider:
   overlay_support:
   shared_preferences: ^2.3.3
+  flutter_swipe_action_cell:
 
 dev_dependencies:
   flutter_test:
