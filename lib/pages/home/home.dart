@@ -5,6 +5,7 @@ import 'package:finance_tracker/helper/laporan_service.dart';
 import 'package:finance_tracker/models/laporan_model.dart';
 import 'package:finance_tracker/pages/home/home_service.dart';
 import 'package:finance_tracker/pages/home/home_widget.dart';
+import 'package:finance_tracker/pages/input/input.dart';
 import 'package:finance_tracker/repository/laporan_repository.dart';
 import 'package:finance_tracker/reusables/bottomsheet.dart';
 import 'package:finance_tracker/reusables/notifyer.dart';
@@ -39,17 +40,19 @@ class _HomeState extends State<Home> {
     'sortKey': 'date',
     'sortOrder': 'desc',
   };
+  Map<String, dynamic> _originalLaporanFilter = {};
 
-  bool isLaporanFilterEmpty() =>
-      _laporanFilter['laporan_type'].isEmpty &&
-      _laporanFilter['category'].isEmpty &&
-      _laporanFilter['date-range'] == '' &&
-      !_laporanFilter['imageOnly'];
+  bool isLaporanFilterEmpty() {
+    return _laporanFilter.entries.every(
+      (entry) => entry.value == _originalLaporanFilter[entry.key],
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchLaporans();
+    _originalLaporanFilter = Map.from(_laporanFilter);
   }
 
   @override
@@ -59,94 +62,99 @@ class _HomeState extends State<Home> {
         scrolledUnderElevation: 0,
         foregroundColor: Colors.white,
         backgroundColor: Colors.transparent,
-        actions: const [
-          ThemeToggleButton(),
-          //   DEBUG ONLY
-          //   IconButton(
-          //     onPressed: () {
-          //       _fetchLaporans();
-          //       notify(context, NotifySeverity.success,
-          //           message: 'Data refreshed, length: ${_laporanList.length}');
-          //     },
-          //     icon: const Icon(Icons.refresh),
-          //   ),
+        actions: [
+          !isLaporanFilterEmpty()
+              ? IconButton(
+                  onPressed: () {
+                    _clearFilter();
+                  },
+                  icon: const Icon(CupertinoIcons.clear_circled))
+              : const SizedBox(),
+          const ThemeToggleButton(),
         ],
         title: const AppBarTitle(),
       ),
       backgroundColor: Theme.of(context).brightness == Brightness.light
           ? Theme.of(context).colorScheme.primary
           : Theme.of(context).colorScheme.primaryContainer,
-      body: _laporanList.isEmpty && isLaporanFilterEmpty()
-          ? const Center(
-              child: Text('No data',
-                  style: TextStyle(fontSize: 18, color: Colors.white)))
-          : Column(
+      body: Column(
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 16),
+            width: double.infinity,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
-                  padding: const EdgeInsets.only(
-                      top: 16, left: 16, right: 16, bottom: 16),
-                  width: double.infinity,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          buildTotalAll(),
-                          buildTotalBulanIni(),
-                          const SizedBox(height: 12),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.light
-                          ? Theme.of(context).colorScheme.surfaceDim
-                          : Theme.of(context).colorScheme.surfaceContainer,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                      ),
-                    ),
-                    padding: const EdgeInsets.only(
-                      top: 16,
-                      left: 8,
-                      right: 8,
-                      bottom: 16,
-                    ),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 2),
-                        buildFilterButtons(context),
-                        _laporanList.isEmpty
-                            ? Expanded(
-                                child: Center(
-                                    child: Text('No data',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface
-                                              .withOpacity(0.5),
-                                          fontWeight: FontWeight.w500,
-                                        ))))
-                            : const SizedBox(height: 8),
-                        buildLaporanList(),
-                      ],
-                    ),
-                  ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    buildTotalAll(),
+                    buildTotalBulanIni(),
+                    const SizedBox(height: 12),
+                  ],
                 ),
               ],
             ),
+          ),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.light
+                    ? Theme.of(context).colorScheme.surfaceDim
+                    : Theme.of(context).colorScheme.surfaceContainer,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              padding: const EdgeInsets.only(
+                top: 16,
+                left: 8,
+                right: 8,
+                bottom: 16,
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 2),
+                  buildShortcutButtons(context),
+                  _laporanList.isEmpty
+                      ? Expanded(
+                          child: Center(
+                              child: Text('No data',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface
+                                        .withOpacity(0.5),
+                                    fontWeight: FontWeight.w500,
+                                  ))))
+                      : const SizedBox(height: 8),
+                  buildLaporanList(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Theme.of(context).brightness == Brightness.light
             ? Theme.of(context).colorScheme.primary
             : null,
-        onPressed: () {},
+        onPressed: () async {
+          bool shouldRefresh = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AddLaporan(),
+                ),
+              ) ??
+              false;
+          if (shouldRefresh) {
+            _fetchLaporans();
+          }
+        },
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
@@ -202,14 +210,26 @@ class _HomeState extends State<Home> {
                     ),
                     SwipeAction(
                       icon: const Icon(Icons.edit, color: Colors.white),
-                      onTap: (CompletionHandler handler) {},
+                      onTap: (CompletionHandler handler) async {
+                        bool shouldRefresh = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => AddLaporan(
+                                  laporan: laporan,
+                                ),
+                              ),
+                            ) ??
+                            false;
+                        if (shouldRefresh) {
+                          _fetchLaporans();
+                        }
+                      },
                       color: Colors.orange,
                     ),
                   ],
                   child: ListTile(
                     onTap: () async {
                       if (laporan.image == null) return;
-                      var screenHeight = MediaQuery.of(context).size.height;
                       await showDialog(
                         context: context,
                         builder: (BuildContext context) {
@@ -419,7 +439,7 @@ class _HomeState extends State<Home> {
     );
   }
 
-  Container buildFilterButtons(BuildContext context) {
+  Container buildShortcutButtons(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -621,11 +641,39 @@ class _HomeState extends State<Home> {
                       ),
                       CupertinoActionSheetAction(
                         onPressed: () async {
-                          importDataFromCSV(
-                            context,
-                            _laporanRepository,
-                            () => _fetchLaporans(),
-                          );
+                          bool shouldClose = await showCupertinoModalPopup(
+                                context: context,
+                                builder: (context) {
+                                  return CupertinoActionSheet(
+                                    title: const Text('Import Data'),
+                                    message: const Text(
+                                        'Data saat ini akan diganti dengan data baru, yakin ingin mengimport?'),
+                                    actions: [
+                                      CupertinoActionSheetAction(
+                                        onPressed: () {
+                                          importDataFromCSV(
+                                            context,
+                                            _laporanRepository,
+                                            () => _fetchLaporans(),
+                                          );
+                                          Navigator.of(context).pop(true);
+                                        },
+                                        child: const Text('Import Data'),
+                                      ),
+                                    ],
+                                    cancelButton: CupertinoActionSheetAction(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                      },
+                                      child: const Text('Cancel'),
+                                    ),
+                                  );
+                                },
+                              ) ??
+                              false;
+                          if (shouldClose) {
+                            Navigator.of(context).pop();
+                          }
                         },
                         child: const Text('Import dari CSV'),
                       ),
@@ -707,5 +755,13 @@ class _HomeState extends State<Home> {
         _possibleCategories = laporan['categoryList'];
       });
     });
+  }
+
+  void _clearFilter() {
+    setState(() {
+      _laporanFilter.clear();
+      _laporanFilter.addAll(_originalLaporanFilter);
+    });
+    _fetchLaporans();
   }
 }
